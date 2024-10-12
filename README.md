@@ -2,7 +2,7 @@
 - [azurite](https://learn.microsoft.com/ja-jp/azure/storage/common/storage-use-azurite?tabs=visual-studio%2Cblob-storage) についてDockerコンテナを利用した環境構築を試したときのメモ
 - Azure歴2日とかなので間違ってること書いていることがあるかもしれない。。（；o；
 
-## 参考サイト
+## 参考サイト（Blob コンテナ関連）
 - [ローカルでの Azure Storage の開発に Azurite エミュレーターを使用する | Microsoft Learn](https://learn.microsoft.com/ja-jp/azure/storage/common/storage-use-azurite?tabs=docker-hub%2Cblob-storage)
   - 公式のドキュメント（Dockerを利用しないケースの情報も含む）
   - azure-cli コンテナからの az コマンドを使用したストレージ操作の際の `ストレージアカウント` や `アカウントキー` についても[同記事内](https://learn.microsoft.com/ja-jp/azure/storage/common/storage-use-azurite?tabs=docker-hub%2Cblob-storage#well-known-storage-account-and-key)に記載がある
@@ -165,3 +165,18 @@ Finished[#############################################################]  100.000
 ![upload_folder_deep_04](./images/upload_folder_deep_04.png)
 
 - `孫フォルダを含む全てのディレクトリ構造を維持したアップロードが行えることを確認できた!これは便利(^o^)`
+
+### delete_blob_container
+- 作成したblobコンテナを削除する
+- azuriteでの動作確認においては中にファイルが残っていようがこれといった確認なしで削除できた(本番がどうかは不明)
+- 実行後に`{ "deleted": true }`という出力が得られれば正常(ちなみに2度目の実行では既にBlobコンテナが存在しないため`{ "deleted": false }`となる)
+
+```bash
+> make delete_blob_container
+docker compose exec azure-cli az storage container delete \
+                --name example \
+                --connection-string ''DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;'BlobEndpoint=http://azurite:10000/devstoreaccount1;'
+{
+  "deleted": true
+}
+```
