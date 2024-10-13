@@ -29,6 +29,18 @@ azurite 接続文字列情報（以下KeyValueのうち必要なものを連結�
 |QueueEndpoint|http://azurite:10001/devstoreaccount1|任意|
 |TableEndpoint|http://azurite:10002/devstoreaccount1|任意|
 
+## 参考サイト（テーブル ストレージ関連）
+- [テーブル ストレージの概要 - Azure のオブジェクト ストレージ | Microsoft Learn](https://learn.microsoft.com/ja-jp/azure/storage/tables/table-storage-overview)
+  - テーブルストレージに関するドキュメント
+  - テーブルアカウント、テーブル、エンティティといったテーブルストレージを構成する要素について理解するのに必要となる情報がまとまっている
+- [az storage table | Microsoft Learn](https://learn.microsoft.com/ja-jp/cli/azure/storage/table?view=azure-cli-latest)
+  - テーブルストレージのテーブルを azure-cli から扱う際のコマンドに関するドキュメント
+  - `AZURE_STORAGE_CONNECTION_STRING` 環境変数に関する情報もこのページ内あった
+- [az storage entity | Microsoft Learn](https://learn.microsoft.com/ja-jp/cli/azure/storage/entity?view=azure-cli-latest)
+  - テーブルストレージのエンティティを azure-cli から扱う際のコマンドに関するドキュメント
+  - エンティティというのはテーブル内に含まれるレコードのこと
+  - AWSのDynamoDBと比べるとTTLに関する設定などは存在しないみたい？
+
 ## Makefileの各ターゲットについて
 ### init
 - 勉強用のコンテナ環境を起動する
@@ -175,8 +187,120 @@ Finished[#############################################################]  100.000
 > make delete_blob_container
 docker compose exec azure-cli az storage container delete \
                 --name example \
-                --connection-string ''DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;'BlobEndpoint=http://azurite:10000/devstoreaccount1;'
+                --connection-string 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;'
 {
   "deleted": true
 }
+```
+
+### create_table_storage_table
+- テーブルストレージに mytable という名前のテーブルを作成する
+- 実行後に`{ "created": true }`という出力が得られれば正常
+- Blobコンテナの作成と異なりテーブルが存在する状態で再実行した場合も`{ "created": true }`となるみたい？
+
+```bash
+> make create_table_storage_table
+docker compose exec azure-cli az storage table create \
+                --name mytable \
+                --connection-string 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://azurite:10002/devstoreaccount1;'
+{
+  "created": true
+}
+```
+
+### list_table_storage_tables
+- テーブルストレージに作成済みのテーブル一覧を取得する
+
+```bash
+> make list_table_storage_tables
+docker compose exec azure-cli az storage table list \
+                --connection-string 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://azurite:10002/devstoreaccount1;'
+[
+  {
+    "name": "mytable"
+  }
+]
+```
+
+### insert_table_storage_entity
+- テーブルストレージに作成した mytable テーブルにエンティティ(レコード)を作成する
+- `PartitionKey` と` RowKey` の組み合わせで一意な値となる必要がある
+- `--if-exists` オプションの設定によってテーブル内に PartitionKey と RowKey の組み合わせが存在する場合の動作を変更できる
+  - fail: エラーになる(`The specified entity already exists.`というエラー出力が返ってくる、`省略時の規定値`)
+  - merge: マージする(同じキーの登録があったら上書きする)
+  - replace: リプレイスする(丸ごと後から送ったエンティティ情報で置き換える)
+
+```bash
+> make insert_table_storage_entity
+docker compose exec azure-cli az storage entity insert \
+                --table-name mytable \
+                --if-exists merge \
+                --entity PartitionKey=AAA RowKey=BBB Content=TestData CurrentTime=1728797654 \
+                --connection-string 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://azurite:10002/devstoreaccount1;'
+{
+  "content": {
+    "Content": "TestData",
+    "CurrentTime": 1728797654,
+    "PartitionKey": "AAA",
+    "RowKey": "BBB",
+    "Timestamp": "2024-10-13T05:39:21.0824619Z",
+    "odata.etag": "W/\"datetime'2024-10-13T05%3A39%3A21.0824619Z'\"",
+    "odata.metadata": "http://azurite:10002/devstoreaccount1/$metadata#mytable/@Element"
+  },
+  "date": "2024-10-13T05:39:21+00:00",
+  "etag": "W/\"datetime'2024-10-13T05%3A39%3A21.0824619Z'\"",
+  "preference_applied": "return-content",
+  "version": "2024-11-04"
+}
+```
+
+### list_table_storage_mytable_entities
+- テーブルストレージに作成した mytable テーブルに登録されているエンティティの一覧を取得する
+
+```bash
+> make list_table_storage_mytable_entities
+docker compose exec azure-cli az storage entity query \
+                --table-name mytable \
+                --connection-string 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://azurite:10002/devstoreaccount1;'
+{
+  "items": [
+    {
+      "Content": "TestData2",
+      "CurrentTime": 1728797654,
+      "PartitionKey": "AAA",
+      "RowKey": "BBB",
+      "Timestamp": "2024-10-13T05:44:31.992371+00:00",
+      "etag": "W/\"datetime'2024-10-13T05%3A44%3A31.9923713Z'\""
+    }
+  ],
+  "nextMarker": {}
+}
+```
+
+### delete_table_storage_table
+- テーブルストレージに作成した mytable テーブルを削除する
+- 実行後に`{ "deleted": true }`という出力が得られれば正常(ちなみに2度目の実行では既にテーブルが存在しないため`{ "deleted": false }`となる)
+
+```bash
+> make delete_table_storage_table
+docker compose exec azure-cli az storage table delete \
+                --name mytable \
+                --connection-string 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://azurite:10002/devstoreaccount1;'
+{
+  "deleted": true
+}
+```
+
+### send_connection_string_via_env
+- ドキュメントに記載の `AZURE_STORAGE_CONNECTION_STRING` 環境変数で接続文字列を渡すことで `--connection-string` オプションによる設定を行わずにコマンドが実行可能なことを確認
+- 例としてテーブルストレージに作成済みのテーブル一覧を取得する
+
+```bash
+> make send_connection_string_via_env
+docker compose exec -e AZURE_STORAGE_CONNECTION_STRING='DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://azurite:10002/devstoreaccount1;' azure-cli az storage table list
+[
+  {
+    "name": "mytable"
+  }
+]
 ```
